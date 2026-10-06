@@ -1,0 +1,24 @@
+name: Merge Freeze Guard
+# The Merge Freeze status blocks merges only while merge-freeze is a required check of the dev and staging rulesets; this notices when it is not.
+on:
+  schedule:
+    - cron: '37 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    name: Merge freeze guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+      - name: Require merge-freeze on dev and staging
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: bash .github/scripts/merge-freeze-guard.sh
