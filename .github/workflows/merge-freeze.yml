@@ -1,0 +1,49 @@
+name: Merge Freeze
+# Freezes merges into dev while a dev -> staging PR is open, and into staging while a staging -> master PR is open.
+# It only posts the `merge-freeze` commit status; the status blocks a merge once it is a required check of the dev and staging rulesets.
+# pull_request_target and schedule run the copy on the default branch (dev), never the PR's or the base's.
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review, converted_to_draft, closed, edited]
+    branches: [dev, staging, master]
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Print the status changes without posting them
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  pull-requests: read
+  statuses: write
+
+jobs:
+  sweep:
+    # never name a job merge-freeze: a skipped job reports a passing check of that name and would satisfy the required status
+    name: Merge freeze sweep
+    if: >-
+      (github.event_name != 'workflow_dispatch' || github.ref_name == 'dev' || inputs.dry_run) &&
+      (github.event_name != 'pull_request_target' || (
+        (github.event.pull_request.base.ref != 'master' || github.event.pull_request.head.ref == 'staging' || github.event.changes.base != null) &&
+        (github.event.action != 'edited' || github.event.changes.base != null)
+      ))
+    concurrency:
+      group: ${{ inputs.dry_run && format('merge-freeze-dry-run-{0}', github.run_id) || 'merge-freeze' }}
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request_target' && github.event.repository.default_branch || github.ref }}
+          sparse-checkout: .github/scripts
+      - name: Sweep open PRs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          MERGE_FREEZE_DRY_RUN: ${{ inputs.dry_run && 'true' || 'false' }}
+        run: bash .github/scripts/merge-freeze.sh
