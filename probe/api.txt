@@ -1,0 +1,4 @@
+line1
+line2 part1
+line3
+newfn part1
